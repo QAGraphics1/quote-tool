@@ -2249,6 +2249,11 @@
 
         // Niagara-specific CSV processing (separated from original logic)
         function processNiagaraCSV(csvContent) {
+            // Remove UTF-8 BOM if present
+            if (csvContent.charCodeAt(0) === 0xFEFF) {
+                csvContent = csvContent.slice(1);
+            }
+
             const lines = csvContent.split('\n').filter(line => line.trim());
             if (lines.length === 0) {
                 throw new Error('Empty CSV file');
@@ -2256,7 +2261,7 @@
 
             // Parse CSV - assume first line is header
             const header = lines[0].split(',');
-            const objectIndex = header.findIndex(col => col.toLowerCase().includes('object'));
+            const objectIndex = header.findIndex(col => col.trim().toLowerCase() === 'object');
 
             if (objectIndex === -1) {
                 throw new Error('No Object column found in CSV');
@@ -2273,7 +2278,12 @@
                 if (!line) continue;
 
                 const cols = line.split(',');
-                const pointPath = cols[objectIndex]?.trim();
+                let pointPath = cols[objectIndex]?.trim();
+
+                // Remove surrounding quotes if present (some CSV exports quote values)
+                if (pointPath && pointPath.startsWith('"') && pointPath.endsWith('"')) {
+                    pointPath = pointPath.slice(1, -1);
+                }
 
                 if (!pointPath || !pointPath.startsWith('/')) continue;
 
@@ -2400,6 +2410,11 @@
 
         // Johnson Controls/Metasys CSV processing (exact logic from metasys-mapper.html)
         function processJohnsonCSV(csvContent) {
+            // Remove UTF-8 BOM if present
+            if (csvContent.charCodeAt(0) === 0xFEFF) {
+                csvContent = csvContent.slice(1);
+            }
+
             const lines = csvContent.split('\n').filter(line => line.trim());
             if (lines.length === 0) {
                 throw new Error('Empty CSV file');
@@ -2416,7 +2431,10 @@
 
             if (!hasTypeColumn) {
                 // Legacy single column format - find path column
-                pathIndex = header.findIndex(col => col.toLowerCase().includes('fullpath') || col.toLowerCase().includes('object'));
+                pathIndex = header.findIndex(col => {
+                    const normalized = col.trim().toLowerCase();
+                    return normalized === 'fullpath' || normalized === 'object';
+                });
                 if (pathIndex === -1) {
                     throw new Error('No FullPath or Object column found in CSV');
                 }
@@ -2505,9 +2523,18 @@
                 if (!line) continue;
 
                 const cols = line.split(',');
-                const fullPath = cols[pathIndex]?.trim();
-                const itemType = hasTypeColumn ? cols[typeIndex]?.trim() : null;
-                const displayName = hasDisplayColumn ? cols[displayIndex]?.trim() : null;
+
+                // Helper function to remove surrounding quotes from CSV values
+                const unquote = (val) => {
+                    if (val && val.startsWith('"') && val.endsWith('"')) {
+                        return val.slice(1, -1);
+                    }
+                    return val;
+                };
+
+                const fullPath = unquote(cols[pathIndex]?.trim());
+                const itemType = hasTypeColumn ? unquote(cols[typeIndex]?.trim()) : null;
+                const displayName = hasDisplayColumn ? unquote(cols[displayIndex]?.trim()) : null;
 
                 if (!fullPath) continue;
 
